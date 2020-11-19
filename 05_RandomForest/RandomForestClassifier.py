@@ -28,15 +28,15 @@ class RandomForestClassifier:
         self.current_leaves = 0
         self.current_depth = 0
         self.n_trees = n_trees
-        self.forest = None
+        self.build_forest = None
     
     # Генерация бустрэп выборок и подмножества признаков для нахождения разбиения в узле
-    def get_bootstrap(self, data, labels, n_trees):
+    def get_bootstrap(self, data, labels, N):
         n_samples = data.shape[0]
         bootstrap = []
-        is_oob_samples = np.zeros((data.shape[0], n_trees)) #для oob
+        is_oob_samples = np.zeros((data.shape[0], N)) #для oob
         
-        for i in range(len(n_trees)):
+        for i in range(N):
             b_data = np.zeros(data.shape)
             b_labels = np.zeros(labels.shape)
             used_samples = [] 
@@ -233,7 +233,7 @@ class RandomForestClassifier:
     
     def fit(self, data, labels, n_trees):
         
-        self.forest = self.random_forest(data, labels, n_trees)
+        self.build_forest = self.random_forest(data, labels, n_trees)
 
         return self
 
