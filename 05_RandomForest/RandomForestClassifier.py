@@ -1,43 +1,45 @@
 import numpy as np
+import random
+from Node import Node
+from Leaf import Leaf
 
 class RandomForestClassifier:
 
     def __init__(
         self,
-        max_depth: int=6,
-        num_leaves: int=32,
-        min_samples_leaf: int=5,
-        criterion: str='gini',
+        max_depth: int = 6,
+        num_leaves: int = 3,
+        min_samples_leaf: int = 5,
+        criterion: str = 'gini',
         oob_score: bool = False,
-        n_trees: int=10):
+        n_trees: int = 10):
 
         self.max_depth = max_depth
         self.num_leaves = num_leaves
         self.min_samples_leaf = min_samples_leaf
         self.oob_score = oob_score
-        self.n_trees = n_trees
 
-        if criterion not in ["gini"]:
+        if criterion not in ['gini', 'entropy']:
             raise ValueError(
-                "Undefined criterion value. Please use: 'gini'."
+                "Undefined criterion value. Please use: 'gini' or 'entropy'."
             )
 
-        self.information_criterio = self.gini if criterion == 'gini'
+        self.information_criterio = self.gini if criterion == "gini" else self.entropy
         self.current_leaves = 0
         self.current_depth = 0
-    )
-
-
+        self.n_trees = n_trees
+        self.forest = None
+    
     # Генерация бустрэп выборок и подмножества признаков для нахождения разбиения в узле
-    def get_bootstrap(self, data, labels, N):
+    def get_bootstrap(self, data, labels, n_trees):
         n_samples = data.shape[0]
         bootstrap = []
-        is_oob_samples = np.zeros((data.shape[0], N))
+        is_oob_samples = np.zeros((data.shape[0], n_trees)) #для oob
         
-        for i in range(N):
+        for i in range(len(n_trees)):
             b_data = np.zeros(data.shape)
             b_labels = np.zeros(labels.shape)
-            used_samples = [] #для oob
+            used_samples = [] 
             
             for j in range(n_samples):
                 sample_index = random.randint(0, n_samples-1)
@@ -47,10 +49,11 @@ class RandomForestClassifier:
                 
             for sample in used_samples:
                 if sample not in used_samples:
-                    is_oob_samples[i, j] == True
+                    is_oob_samples[i, j] == True #добавляем в oob_sample
                 else:
                     is_oob_samples[i, j] == False
-                    bootstrap.append((b_data, b_labels))
+                    
+            bootstrap.append((b_data, b_labels))
         
         return bootstrap, is_oob_samples
 
@@ -62,7 +65,7 @@ class RandomForestClassifier:
 
         np.random.shuffle(sample_indexes)
 
-        for i in range(len_subsample):
+        for _ in range(len_subsample):
             subsample.append(sample_indexes.pop())
 
         return subsample
@@ -82,12 +85,29 @@ class RandomForestClassifier:
             impurity -= p ** 2
             
         return impurity
+    
+    def entropy(self, labels):
+       
+        classes = {}
+        for label in labels:
+            if label not in classes:
+                classes[label] = 0
+            classes[label] += 1
+
+        impurity = 0
+        for label in classes:
+            p = classes[label] / len(labels)
+            impurity += p*np.log2(p)
+
+        return -impurity
 
     def quality(self, left_labels, right_labels, current_gini):
 
         p = float(left_labels.shape[0]) / (left_labels.shape[0] + right_labels.shape[0])
+        right_p = self.information_criterio(right_labels)
+        left_p = self.information_criterio(left_labels)
         
-        return current_gini - p * gini(left_labels) - (1 - p) * gini(right_labels)
+        return current_gini - p*left_p - (1 - p)*right_p
 
     def split(self, data, labels, index, t):
         
@@ -112,7 +132,7 @@ class RandomForestClassifier:
         n_features = data.shape[1]
         
         # выбор индекса из подвыборки длиной sqrt(n_features)
-        subsample = get_subsample(n_features)
+        subsample = self.get_subsample(n_features)
         
         for index in subsample:
             
@@ -124,7 +144,7 @@ class RandomForestClassifier:
                 if len(true_data) < self.min_samples_leaf or len(false_data) < self.min_samples_leaf:
                     continue
                 
-                current_quality = quality(true_labels, false_labels, current_gini)
+                current_quality = self.quality(true_labels, false_labels, current_quality)
                 
                 
                 if current_quality > best_quality:
@@ -137,13 +157,13 @@ class RandomForestClassifier:
         quality, t, index = self.find_best_split(data, labels)
         
         if self.current_leaves >= self.num_leaves:
-            return Leaf(X, y)
+            return Leaf(data, labels)
 
         if self.current_depth >= self.max_depth:
-            return Leaf(X, y)
+            return Leaf(data, labels)
 
         if quality == 0:
-            return Leaf(X, y)
+            return Leaf(data, labels)
 
         true_data, false_data, true_labels, false_labels = self.split(data, labels, index, t)
 
@@ -155,66 +175,75 @@ class RandomForestClassifier:
 
         return Node(index, t, true_branch, false_branch)
 
-    def oob_accuracy(data, labels, is_oob_sample, forest):
+    #функция для расчёта oob_accuracy
+    def oob_accuracy(self, data, labels, is_oob_samples, forest):
         correct = 0
         total = 0
         
-        for obj in range(data.shape[0]):
-            votes = []
-            
-            for tree in forest:
-                if is_oob_sample[obj, tree]:
-                    votes.append(classify_object(i,j))
+        if self.oob_score == True:
+
+            for obj in range(data.shape[0]):
+                votes = []
                 
-            predicted = max(set(votes), key=votes.count)
-            
-            actual = labels[i]
-            total += 1
-            
-            if actual == predicted:
-                correct += 1
+                for tree in range(len(forest)):
+                    if is_oob_samples[obj, tree]:
+                        votes.append(self.classify_object(obj, tree))
+                    
+                predicted = max(set(votes), key=votes.count)
                 
-        oob_accuracy = correct / total
+                actual = labels[obj]
+                total += 1
                 
-        return oob_accuracy
+                if actual == predicted:
+                    correct += 1
+                
+            oob_accuracy = (correct / total) * 100
+                
+        return oob_accuracy 
     
-    def random_forest(self, data, labels, n_trees, oob_score):
+    def random_forest(self, data, labels, n_trees):
         forest=[]
         bootstrap = self.get_bootstrap(data, labels, n_trees)
 
         for b_data, b_labels in bootstrap:
-            forest.append(build_tree(b_data, b_labels))
-
-        score = self.oob_accuracy(data, labels, is_oob_sample, forest) if oob_score
-
-        return forest, score
+            forest.append(self.build_tree(b_data, b_labels))
+        
+        return forest
     
-    def classify_object(obj, node):
+    def classify_object(self, obj, node):
 
         if isinstance(node, Leaf):
             answer = node.prediction
             return answer
 
         if obj[node.index] <= node.t:
-            return classify_object(obj, node.true_branch)
+            return self.classify_object(obj, node.true_branch)
         else:
-            return classify_object(obj, node.false_branch)
-    
-    
-    def predict(self, data, tree):
-    
+            return self.classify_object(obj, node.false_branch)
+
+    def calc_class(self, data, tree):
+ 
         classes = []
+        
         for obj in data:
             prediction = self.classify_object(obj, tree)
             classes.append(prediction)
-    
+        
         return classes
+    
+    def fit(self, data, labels, n_trees):
+        
+        self.forest = self.random_forest(data, labels, n_trees)
+
+        return self
+
 
     #Предсказание голосованием деревьев
-    def tree_vote(self, forest, data):
+    def predict(self, forest, data):
+        
         predictions = []
         for tree in forest:
-            predictions.append(predict(data, tree))
+            predictions.append(self.calc_class(data, tree))
 
         #список с предсказаниями для каждого объекта
         predictions_per_object = list(zip(*predictions))
@@ -226,4 +255,3 @@ class RandomForestClassifier:
             voted_predictions.append(np.max(set(obj), key = obj.count))
 
         return voted_predictions
-
