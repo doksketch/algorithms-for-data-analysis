@@ -2,7 +2,7 @@
 def gb_predict(X, trees_list, coef_list, eta):
     # Реализуемый алгоритм градиентного бустинга будет инициализироваться нулевыми значениями,
     # поэтому все деревья из списка trees_list уже являются дополнительными и при предсказании прибавляются с шагом eta
-    return np.array([sum(eta * coef * alg.predict([x])[0] for alg, coef in zip(trees_list, coef_list)]) for x in X)
+    return np.array([sum([eta* coef * alg.predict([x])[0] for alg, coef in zip(trees_list, coef_list)]) for x in X])
 
 # функция обучения градиентного бустинга
 def gb_fit(n_trees, max_depth, X_train, X_test, y_train, y_test, coefs, eta):
