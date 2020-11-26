@@ -1,7 +1,8 @@
 import numpy as np
-from metrics import euclidean
+from metrics import get_distance
 
-def kmeans(data, k, max_iterations, min_distance):
+
+def kmeans(data, k, max_iterations, min_distance, metrics):
     # Создадим словарь для классификации
     classes = {i: [] for i in range(k)}
     
@@ -12,7 +13,7 @@ def kmeans(data, k, max_iterations, min_distance):
         # классифицируем объекты по центроидам
         for x in data:
             # определим расстояния от объекта до каждого центроида
-            distances = [euclidean(x, centroid) for centroid in centroids]
+            distances = [get_distance(x, centroid, metrics) for centroid in centroids]
             # отнесем объект к кластеру, до центроида которого наименьшее расстояние
             classification = distances.index(min(distances))
             classes[classification].append(x)
@@ -33,5 +34,5 @@ def kmeans(data, k, max_iterations, min_distance):
         # если все смещения меньше минимального, останавливаем алгоритм  
         if optimal:
             break
-    
+
     return old_centroids, classes
