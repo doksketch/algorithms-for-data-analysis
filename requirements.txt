@@ -1,0 +1,5 @@
+# req without versions
+numpy
+pylab
+matplotlib
+sklearn
